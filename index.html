@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Void Crew Power Budget Calculator — loadout power vs. core capacity</title>
+<meta name="description" content="Add up your Void Crew ship's installed-equipment power cost against your Power Core capacity before you fly, so you can see a surplus or deficit instead of finding out mid-mission.">
+<style>
+  :root {
+    --bg: #0e1420;
+    --panel: #161e2c;
+    --panel-border: #2b3a52;
+    --ink: #e4ebf5;
+    --ink-dim: #93a2bd;
+    --accent: #3d7ab8;
+    --accent-bright: #6fb3ef;
+    --field-bg: #0a0f18;
+    --warn: #c2874f;
+    --surplus: #5db37a;
+    --deficit: #c2614f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 16px;
+  }
+  .sub { color: var(--ink-dim); font-size: 0.93rem; margin: 0 0 28px; }
+  .sub a { color: var(--accent-bright); }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+  section h2 { font-size: 1.1rem; margin: 0 0 6px; }
+  .section-note { color: var(--ink-dim); font-size: 0.85rem; margin: 0 0 16px; }
+  .field-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+    align-items: end;
+  }
+  .field { display: flex; flex-direction: column; }
+  label.field-label { font-size: 0.85rem; color: var(--ink-dim); margin-bottom: 6px; }
+  label.field-label .hint { color: var(--warn); font-size: 0.75rem; }
+  input[type="number"], input[type="text"], select {
+    width: 100%;
+    background: var(--field-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 9px 10px;
+    font-size: 1rem;
+  }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  button {
+    background: var(--field-bg);
+    color: var(--accent-bright);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 9px 14px;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  button:hover { background: #10324a; }
+  button.remove { color: var(--deficit); border-color: var(--deficit); padding: 5px 10px; font-size: 0.8rem; }
+  table.loadout { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 12px; }
+  table.loadout th, table.loadout td { border: 1px solid var(--panel-border); padding: 7px 8px; text-align: left; }
+  table.loadout th { color: var(--ink-dim); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.02em; }
+  table.loadout input[type="checkbox"] { width: 18px; height: 18px; }
+  .output-box {
+    border-top: 1px solid var(--panel-border);
+    margin-top: 6px;
+    padding-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+  }
+  .output-cell { background: var(--field-bg); border: 1px solid var(--panel-border); border-radius: 4px; padding: 10px 12px; }
+  .output-cell .output-label { font-size: 0.78rem; color: var(--ink-dim); display: block; margin-bottom: 3px; }
+  .output-cell .output-value { font-size: 1.25rem; font-weight: 600; color: var(--accent-bright); }
+  .output-cell.surplus .output-value { color: var(--surplus); }
+  .output-cell.deficit .output-value { color: var(--deficit); }
+  .output-cell .output-sub { font-size: 0.75rem; color: var(--ink-dim); display: block; margin-top: 3px; }
+  table.ref { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px; }
+  table.ref th, table.ref td { border: 1px solid var(--panel-border); padding: 6px 9px; text-align: left; }
+  table.ref th { color: var(--ink-dim); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.02em; }
+  table.ref td.num { font-weight: 600; color: var(--accent-bright); }
+  .single-source-note { color: var(--warn); font-size: 0.78rem; margin-top: 8px; }
+  .sources-section { font-size: 0.82rem; color: var(--ink-dim); }
+  .sources-section h2 { font-size: 1.05rem; }
+  .sources-section ol { margin: 6px 0 16px; padding-left: 22px; }
+  .sources-section li { margin-bottom: 8px; }
+  .sources-section a { color: var(--accent-bright); }
+  .self-test { font-size: 0.75rem; color: var(--ink-dim); margin-top: 10px; }
+  .self-test.ok { color: var(--accent-bright); }
+  .self-test.bad { color: var(--warn); }
+  footer { max-width: 900px; margin: 0 auto; padding: 0 20px 40px; font-size: 0.8rem; color: var(--ink-dim); }
+  footer a { color: var(--accent-bright); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Void Crew Power Budget Calculator — loadout power vs. core capacity</h1>
+  <p class="sub">Add up your ship's installed-equipment power cost against your Power Core
+  capacity before you fly. Enter the numbers your own in-game screens show you — this page does
+  not guess them for you, and it does not tell you what to install. It only does the addition.
+  Fan-made for <a href="https://store.steampowered.com/app/1063420" target="_blank" rel="noopener">Void Crew</a>
+  (Hutlihut Games), unaffiliated.</p>
+
+  <section>
+    <h2>Your ship</h2>
+    <p class="section-note">Hardpoint layout and crew size, for reference while you plan a
+    loadout — not used in the power math below.</p>
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label" for="shipSelect">Ship class</label>
+        <select id="shipSelect">
+          <option value="FRIGATE">Frigate</option>
+          <option value="DESTROYER">Destroyer</option>
+        </select>
+      </div>
+    </div>
+    <p id="shipInfo" class="section-note"></p>
+  </section>
+
+  <section>
+    <h2>Power budget</h2>
+    <p class="section-note">Void Crew's power system is a <strong>loadout budget</strong>, not a
+    live per-second drain: each installed piece of equipment has a fixed "Power Required" cost,
+    and your ship's Power Core has a maximum capacity (raised by installing Power Generators).
+    Install more than the core can supply and it overloads — heat builds up and circuit breakers
+    trip over time, eventually shutting systems down. Engine thrust and Booster are a separate,
+    unrelated stat and are not part of this budget. No ship's base core capacity is published
+    anywhere the wiki documents, so enter the number from your own Power Core / Ship Management
+    screen.</p>
+
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label" for="coreCapacity">Power Core capacity <span class="hint">read from your ship, no default</span></label>
+        <input type="number" id="coreCapacity" min="0" step="1" placeholder="e.g. 12">
+      </div>
+    </div>
+
+    <table class="loadout" id="loadoutTable">
+      <thead>
+        <tr><th>Installed</th><th>Equipment name</th><th>Power Required</th><th></th></tr>
+      </thead>
+      <tbody id="loadoutBody"></tbody>
+    </table>
+    <button type="button" id="addRow">+ Add equipment</button>
+
+    <div class="output-box" id="outputBox"></div>
+  </section>
+
+  <section>
+    <h2>Reference figures (not used above — single-sourced, verify in-game)</h2>
+    <p class="section-note">These numbers come from one wiki (voidcrew.wiki.gg, contributor
+    credited as "Dragon"). A second independent source was searched for and not found, so per
+    this product's data-honesty rule none of them are wired into the calculator as defaults —
+    they are shown only so you can sanity-check what you read on your own screen.</p>
+    <table class="ref">
+      <thead><tr><th>Equipment</th><th>Tier 1</th><th>Tier 2</th><th>Tier 3</th><th>Stat</th></tr></thead>
+      <tbody id="refBody"></tbody>
+    </table>
+    <p class="single-source-note">The Confessor Carronade stats table on the wiki is flagged by
+    the wiki itself as possibly outdated since the Void Crew 1.0 patch (2024-11-25).</p>
+  </section>
+
+  <section class="sources-section">
+    <h2>Sources &amp; last verified date</h2>
+    <p class="verified">All pages below fetched and re-read directly 2026-10-16.</p>
+    <ol>
+      <li><a href="https://voidcrew.wiki.gg/wiki/Frigate" target="_blank" rel="noopener">voidcrew.wiki.gg — Frigate</a>
+      — Engine Power (forward) 2000, Booster Power (forward) 4000; three medium (2x1) hardpoints
+      plus two small (1x1); "ideal for crews of 1-3 players." No power-core-capacity figure on the
+      page.</li>
+      <li><a href="https://voidcrew.wiki.gg/wiki/Destroyer" target="_blank" rel="noopener">voidcrew.wiki.gg — Destroyer</a>
+      — Engine Power (forward) 1000, Booster Power (forward) 2000; six medium (2x1) hardpoints
+      plus one large (2x2); "ideal for crews of 3-4 players." No power-core-capacity figure on the
+      page.</li>
+      <li><a href="https://voidcrew.wiki.gg/wiki/Arc_Shield" target="_blank" rel="noopener">voidcrew.wiki.gg — Arc Shield</a>
+      — Power Required 2 / 3 / 4 across Tier 1 / 2 / 3, data credited to "Dragon" via a Discord
+      link.</li>
+      <li><a href="https://voidcrew.wiki.gg/wiki/Confessor_Carronade" target="_blank" rel="noopener">voidcrew.wiki.gg — Confessor Carronade</a>
+      (the page formerly titled "Shuriken Carronade") — Power Required 4 / 5 / 6 across Tier 1 / 2
+      / 3. The page states its own stats table may be outdated since patch 1.0 (2024-11-25).</li>
+      <li><a href="https://voidcrew.wiki.gg/wiki/Power_Generator" target="_blank" rel="noopener">voidcrew.wiki.gg — Power Generator</a>
+      — Base Production +1 / +2 / +4 across Tier 1 / 2 / 3 (before enhancement slots), no unit
+      given on the page.</li>
+      <li><a href="https://voidcrew.wiki.gg/wiki/Ship_Management" target="_blank" rel="noopener">voidcrew.wiki.gg — Ship Management</a>
+      — describes the power-core-overload mechanic (circuit breakers, heat-per-second by overload
+      level) but is marked a stub and gives no base capacity figure for any ship.</li>
+    </ol>
+    <p>A second independent source for the per-equipment Power Required figures and for any
+    ship's base Power Core capacity was searched for (Steam Community discussions under appid
+    1063420, general web search) and not found — every figure traced back to the same wiki
+    contributor credit. That is why this page asks you to type in your own numbers rather than
+    pre-filling them.</p>
+    <p class="self-test" id="selfTest">running self-test…</p>
+  </section>
+</main>
+
+<footer>
+  Fan-made calculator, unaffiliated with Hutlihut Games or Focus Entertainment. This page does
+  the addition only — it never declares a loadout "best," "optimal," or "meta." Figures above
+  reflect the single source cited, fetched 2026-10-16, and may not match the current patch —
+  verify against your own in-run screens before relying on a number. No account, no server, no
+  data leaves your browser.
+</footer>
+
+<script src="script.js"></script>
+<script>
+(function () {
+  "use strict";
+  var C = window.VCCALC;
+  var rowId = 0;
+
+  function shipInfoText(ship) {
+    var hp = ship.hardpoints;
+    var parts = [];
+    if (hp.large) parts.push(hp.large + " large (2x2)");
+    if (hp.medium) parts.push(hp.medium + " medium (2x1)");
+    if (hp.small) parts.push(hp.small + " small (1x1)");
+    return "Hardpoints: " + parts.join(", ") + ". Crew: " + ship.crew + " players. " +
+      "Engine Power (forward) " + ship.enginePowerForward + ", Booster Power (forward) " +
+      ship.boosterPowerForward + " — thrust stats, not part of the power budget.";
+  }
+
+  function renderShipInfo() {
+    var key = document.getElementById("shipSelect").value;
+    var ship = key === "FRIGATE" ? C.FRIGATE : C.DESTROYER;
+    document.getElementById("shipInfo").textContent = shipInfoText(ship);
+  }
+
+  function addRow(name, power) {
+    rowId++;
+    var tbody = document.getElementById("loadoutBody");
+    var tr = document.createElement("tr");
+    tr.dataset.rowId = String(rowId);
+
+    var tdCheck = document.createElement("td");
+    var check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = true;
+    check.className = "row-installed";
+    check.addEventListener("change", render);
+    tdCheck.appendChild(check);
+
+    var tdName = document.createElement("td");
+    var nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "row-name";
+    nameInput.placeholder = "e.g. Arc Shield T2";
+    nameInput.value = name || "";
+    tdName.appendChild(nameInput);
+
+    var tdPower = document.createElement("td");
+    var powerInput = document.createElement("input");
+    powerInput.type = "number";
+    powerInput.min = "0";
+    powerInput.step = "1";
+    powerInput.className = "row-power";
+    powerInput.placeholder = "0";
+    powerInput.value = power !== undefined ? power : "";
+    powerInput.addEventListener("input", render);
+    tdPower.appendChild(powerInput);
+
+    var tdRemove = document.createElement("td");
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", function () {
+      tr.remove();
+      render();
+    });
+    tdRemove.appendChild(removeBtn);
+
+    tr.appendChild(tdCheck);
+    tr.appendChild(tdName);
+    tr.appendChild(tdPower);
+    tr.appendChild(tdRemove);
+    tbody.appendChild(tr);
+  }
+
+  function readModules() {
+    var rows = document.querySelectorAll("#loadoutBody tr");
+    var modules = [];
+    rows.forEach(function (tr) {
+      var installed = tr.querySelector(".row-installed").checked;
+      var power = parseFloat(tr.querySelector(".row-power").value);
+      modules.push({ powerRequired: isNaN(power) ? 0 : power, installed: installed });
+    });
+    return modules;
+  }
+
+  function cell(label, value, sub, statusClass) {
+    var div = document.createElement("div");
+    div.className = "output-cell" + (statusClass ? " " + statusClass : "");
+    var l = document.createElement("span");
+    l.className = "output-label";
+    l.textContent = label;
+    var v = document.createElement("span");
+    v.className = "output-value";
+    v.textContent = value;
+    div.appendChild(l);
+    div.appendChild(v);
+    if (sub) {
+      var s = document.createElement("span");
+      s.className = "output-sub";
+      s.textContent = sub;
+      div.appendChild(s);
+    }
+    return div;
+  }
+
+  function render() {
+    var capacityRaw = document.getElementById("coreCapacity").value;
+    var modules = readModules();
+    var result = C.computeBudget(capacityRaw, modules);
+
+    var box = document.getElementById("outputBox");
+    box.innerHTML = "";
+    box.appendChild(cell("Power Core capacity", result.capacity, "what you entered above"));
+    box.appendChild(cell("Total installed draw", result.totalDraw, "sum of checked rows' Power Required"));
+
+    var balanceLabel = result.balance > 0 ? "+" + result.balance : String(result.balance);
+    var statusClass = result.status === "surplus" ? "surplus" : (result.status === "deficit" ? "deficit" : "");
+    box.appendChild(cell(
+      result.status === "deficit" ? "Deficit" : (result.status === "surplus" ? "Surplus" : "Balanced"),
+      balanceLabel,
+      "capacity (" + result.capacity + ") − draw (" + result.totalDraw + ")",
+      statusClass
+    ));
+  }
+
+  function renderRef() {
+    var tbody = document.getElementById("refBody");
+    tbody.innerHTML = "";
+    var rows = [
+      ["Arc Shield", C.ARC_SHIELD_POWER_REQUIRED.T1, C.ARC_SHIELD_POWER_REQUIRED.T2, C.ARC_SHIELD_POWER_REQUIRED.T3, "Power Required"],
+      ["Confessor Carronade", C.CONFESSOR_CARRONADE_POWER_REQUIRED.T1, C.CONFESSOR_CARRONADE_POWER_REQUIRED.T2, C.CONFESSOR_CARRONADE_POWER_REQUIRED.T3, "Power Required"],
+      ["Power Generator", C.POWER_GENERATOR_BASE_PRODUCTION.T1, C.POWER_GENERATOR_BASE_PRODUCTION.T2, C.POWER_GENERATOR_BASE_PRODUCTION.T3, "Base Production"]
+    ];
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = "<td>" + r[0] + "</td><td class='num'>" + r[1] + "</td><td class='num'>" + r[2] +
+        "</td><td class='num'>" + r[3] + "</td><td>" + r[4] + "</td>";
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById("shipSelect").addEventListener("change", renderShipInfo);
+  document.getElementById("coreCapacity").addEventListener("input", render);
+  document.getElementById("addRow").addEventListener("click", function () { addRow(); render(); });
+
+  renderShipInfo();
+  renderRef();
+  addRow("Arc Shield T1", 2);
+  addRow("Confessor Carronade T1", 4);
+  render();
+
+  // In-page mirror of the headless known-answer tests in test.js, so opening the file directly
+  // also proves the math without a terminal.
+  (function selfTest() {
+    var el = document.getElementById("selfTest");
+    var pass = 0, total = 5;
+    if (C.ARC_SHIELD_POWER_REQUIRED.T1 === 2) pass++;
+    if (C.CONFESSOR_CARRONADE_POWER_REQUIRED.T3 === 6) pass++;
+    var surplus = C.computeBudget(10, [{ powerRequired: 4, installed: true }, { powerRequired: 3, installed: true }]);
+    if (surplus.balance === 3 && surplus.status === "surplus") pass++;
+    var deficit = C.computeBudget(5, [{ powerRequired: 4, installed: true }, { powerRequired: 3, installed: true }]);
+    if (deficit.balance === -2 && deficit.status === "deficit") pass++;
+    var ignored = C.computeBudget(10, [{ powerRequired: 100, installed: false }]);
+    if (ignored.totalDraw === 0) pass++;
+    el.textContent = "self-test: " + pass + "/" + total + " known-answer scenarios passed";
+    el.className = "self-test " + (pass === total ? "ok" : "bad");
+  })();
+})();
+</script>
+</body>
+</html>
